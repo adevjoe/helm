@@ -34,3 +34,18 @@ type Info struct {
 	// Contains the rendered templates/NOTES.txt if available
 	Notes string `json:"notes,omitempty"`
 }
+
+// Deepcopy xx
+func (r *Info) Deepcopy() *Info {
+	if r == nil {
+		return r
+	}
+	return &Info{
+		FirstDeployed: r.FirstDeployed,
+		LastDeployed:  r.LastDeployed,
+		Deleted:       r.Deleted,
+		Description:   r.Description,
+		Status:        r.Status,
+		Notes:         r.Notes,
+	}
+}

@@ -87,24 +87,9 @@ func (secrets *Secrets) List(filter func(*rspb.Release) bool) ([]*rspb.Release, 
 		return nil, errors.Wrap(err, "list: failed to list")
 	}
 
-	var results []*rspb.Release
-
 	// iterate over the secrets object list
 	// and decode each release
-	for _, item := range list.Items {
-		rls, err := decodeRelease(string(item.Data["release"]))
-		if err != nil {
-			secrets.Log("list: failed to decode release: %v: %s", item, err)
-			continue
-		}
-
-		rls.Labels = item.ObjectMeta.Labels
-
-		if filter(rls) {
-			results = append(results, rls)
-		}
-	}
-	return results, nil
+	return secrets.cacheDecodeReleases(list, filter), nil
 }
 
 // Query fetches all releases that match the provided map of labels.
@@ -129,16 +114,7 @@ func (secrets *Secrets) Query(labels map[string]string) ([]*rspb.Release, error)
 		return nil, ErrReleaseNotFound
 	}
 
-	var results []*rspb.Release
-	for _, item := range list.Items {
-		rls, err := decodeRelease(string(item.Data["release"]))
-		if err != nil {
-			secrets.Log("query: failed to decode release: %s", err)
-			continue
-		}
-		results = append(results, rls)
-	}
-	return results, nil
+	return secrets.cacheDecodeReleases(list, nil), nil
 }
 
 // Create creates a new Secret holding the release. If the
