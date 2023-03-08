@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/ristretto"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -41,16 +42,24 @@ const SecretsDriverName = "Secret"
 // Secrets is a wrapper around an implementation of a kubernetes
 // SecretsInterface.
 type Secrets struct {
-	impl corev1.SecretInterface
-	Log  func(string, ...interface{})
+	impl  corev1.SecretInterface
+	Log   func(string, ...interface{})
+	cache *ristretto.Cache
 }
 
 // NewSecrets initializes a new Secrets wrapping an implementation of
 // the kubernetes SecretsInterface.
 func NewSecrets(impl corev1.SecretInterface) *Secrets {
+	cache, _ := ristretto.NewCache(&ristretto.Config{
+		NumCounters: 1e7,      // number of keys to track frequency of (10M).
+		MaxCost:     16 << 30, // maximum cost of cache (16GB).
+		BufferItems: 64,       // number of keys per Get buffer.
+		Metrics:     true,
+	})
 	return &Secrets{
-		impl: impl,
-		Log:  func(_ string, _ ...interface{}) {},
+		impl:  impl,
+		Log:   func(_ string, _ ...interface{}) {},
+		cache: cache,
 	}
 }
 
@@ -178,13 +187,12 @@ func (secrets *Secrets) Delete(key string) (rls *rspb.Release, err error) {
 //
 // The following labels are used within each secret:
 //
-//    "modifiedAt"    - timestamp indicating when this secret was last modified. (set in Update)
-//    "createdAt"     - timestamp indicating when this secret was created. (set in Create)
-//    "version"        - version of the release.
-//    "status"         - status of the release (see pkg/release/status.go for variants)
-//    "owner"          - owner of the secret, currently "helm".
-//    "name"           - name of the release.
-//
+//	"modifiedAt"    - timestamp indicating when this secret was last modified. (set in Update)
+//	"createdAt"     - timestamp indicating when this secret was created. (set in Create)
+//	"version"        - version of the release.
+//	"status"         - status of the release (see pkg/release/status.go for variants)
+//	"owner"          - owner of the secret, currently "helm".
+//	"name"           - name of the release.
 func newSecretsObject(key string, rls *rspb.Release, lbs labels) (*v1.Secret, error) {
 	const owner = "helm"
 

@@ -87,8 +87,6 @@ func decodeRelease(data string) (*rspb.Release, error) {
 	return &rls, nil
 }
 
-var cache sync.Map = sync.Map{}
-
 func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(*rspb.Release) bool) []*rspb.Release {
 	var results []*rspb.Release
 	resultChan := make(chan *rspb.Release, len(list.Items))
@@ -99,7 +97,7 @@ func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(*rs
 		go func(item v1.Secret) {
 			defer wg.Done()
 			cacheKey := fmt.Sprintf("%s-%s-%s", item.GetUID(), item.GetNamespace(), item.GetName())
-			if i, ok := cache.Load(cacheKey); ok {
+			if i, ok := secrets.cache.Get(cacheKey); ok {
 				if ii, ok := i.(*rspb.Release); ok {
 					resultChan <- ii.Deepcopy()
 					return
@@ -113,7 +111,7 @@ func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(*rs
 
 			rls.Labels = item.ObjectMeta.Labels
 			if rls.Info.Status == rspb.StatusSuperseded || rls.Info.Status == rspb.StatusFailed {
-				cache.Store(cacheKey, rls)
+				secrets.cache.Set(cacheKey, rls, int64(len(item.Data["release"])))
 			}
 			resultChan <- rls
 		}(item)

@@ -12,6 +12,7 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535
 	github.com/containerd/containerd v1.6.1
 	github.com/cyphar/filepath-securejoin v0.2.3
+	github.com/dgraph-io/ristretto v0.1.1
 	github.com/distribution/distribution/v3 v3.0.0-20211118083504-a29a3c99a684
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/evanphx/json-patch v4.12.0+incompatible
