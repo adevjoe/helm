@@ -180,8 +180,7 @@ func (i *Install) installCRDs(crds []chart.CRD) error {
 //
 // If DryRun is set to true, this will prepare the release, but not install it
 
-func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
-	ctx := context.Background()
+func (i *Install) Run(ctx context.Context, chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
 	return i.RunWithContext(ctx, chrt, vals)
 }
 
@@ -456,10 +455,10 @@ func (i *Install) failRelease(rel *release.Release, err error) (*release.Release
 //
 // Roughly, this will return an error if name is
 //
-//	- empty
-//	- too long
-//	- already in use, and not deleted
-//	- used by a deleted release, and i.Replace is false
+//   - empty
+//   - too long
+//   - already in use, and not deleted
+//   - used by a deleted release, and i.Replace is false
 func (i *Install) availableName() error {
 	start := i.ReleaseName
 
