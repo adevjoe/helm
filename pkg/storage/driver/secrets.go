@@ -47,15 +47,16 @@ type Secrets struct {
 	cache *ristretto.Cache
 }
 
+var cache, _ = ristretto.NewCache(&ristretto.Config{
+	NumCounters: 1e7,      // number of keys to track frequency of (10M).
+	MaxCost:     16 << 30, // maximum cost of cache (16GB).
+	BufferItems: 64,       // number of keys per Get buffer.
+	Metrics:     true,
+})
+
 // NewSecrets initializes a new Secrets wrapping an implementation of
 // the kubernetes SecretsInterface.
 func NewSecrets(impl corev1.SecretInterface) *Secrets {
-	cache, _ := ristretto.NewCache(&ristretto.Config{
-		NumCounters: 1e7,      // number of keys to track frequency of (10M).
-		MaxCost:     16 << 30, // maximum cost of cache (16GB).
-		BufferItems: 64,       // number of keys per Get buffer.
-		Metrics:     true,
-	})
 	return &Secrets{
 		impl:  impl,
 		Log:   func(_ string, _ ...interface{}) {},
