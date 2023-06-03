@@ -22,9 +22,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"sync"
 
+	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 	rspb "helm.sh/helm/v3/pkg/release"
 	v1 "k8s.io/api/core/v1"
 )
@@ -63,25 +63,16 @@ func decodeRelease(data string) (*rspb.Release, error) {
 		return nil, err
 	}
 
-	// For backwards compatibility with releases that were stored before
-	// compression was introduced we skip decompression if the
-	// gzip magic header is not found
-	if bytes.Equal(b[0:3], magicGzip) {
-		r, err := gzip.NewReader(bytes.NewReader(b))
-		if err != nil {
-			return nil, err
-		}
-		defer r.Close()
-		b2, err := ioutil.ReadAll(r)
-		if err != nil {
-			return nil, err
-		}
-		b = b2
+	r, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
 	}
+	defer r.Close()
 
-	var rls rspb.Release
 	// unmarshal release object bytes
-	if err := json.Unmarshal(b, &rls); err != nil {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var rls rspb.Release
+	if err := json.NewDecoder(r).Decode(&rls); err != nil {
 		return nil, err
 	}
 	return &rls, nil
@@ -91,22 +82,22 @@ func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(*rs
 	var results []*rspb.Release
 	resultChan := make(chan *rspb.Release, len(list.Items))
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(list.Items))
+	eg := errgroup.Group{}
+	eg.SetLimit(1000)
 	for _, item := range list.Items {
-		go func(item v1.Secret) {
-			defer wg.Done()
+		item := item
+		eg.Go(func() error {
 			cacheKey := fmt.Sprintf("%s-%s-%s", item.GetUID(), item.GetNamespace(), item.GetName())
 			if i, ok := secrets.cache.Get(cacheKey); ok {
 				if ii, ok := i.(*rspb.Release); ok {
 					resultChan <- ii.Deepcopy()
-					return
+					return nil
 				}
 			}
 			rls, err := decodeRelease(string(item.Data["release"]))
 			if err != nil {
 				secrets.Log("list: failed to decode release: %v: %s", item, err)
-				return
+				return err
 			}
 
 			rls.Labels = item.ObjectMeta.Labels
@@ -114,9 +105,10 @@ func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(*rs
 				secrets.cache.Set(cacheKey, rls, int64(len(item.Data["release"])))
 			}
 			resultChan <- rls
-		}(item)
+			return nil
+		})
 	}
-	wg.Wait()
+	eg.Wait()
 	close(resultChan)
 	for k := range resultChan {
 		if filter == nil {

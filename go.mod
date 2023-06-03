@@ -20,6 +20,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/gosuri/uitable v0.0.4
 	github.com/jmoiron/sqlx v1.3.4
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/lib/pq v1.10.4
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/mitchellh/copystructure v1.2.0
@@ -34,6 +35,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/ziutek/mymysql v1.5.4 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
+	golang.org/x/sync v0.2.0
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	k8s.io/api v0.23.5
 	k8s.io/apiextensions-apiserver v0.23.5
