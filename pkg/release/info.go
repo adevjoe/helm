@@ -38,3 +38,18 @@ type Info struct {
 	// Contains the deployed resources information
 	Resources map[string][]runtime.Object `json:"resources,omitempty"`
 }
+
+// Deepcopy xx
+func (r *Info) Deepcopy() *Info {
+	if r == nil {
+		return r
+	}
+	return &Info{
+		FirstDeployed: r.FirstDeployed,
+		LastDeployed:  r.LastDeployed,
+		Deleted:       r.Deleted,
+		Description:   r.Description,
+		Status:        r.Status,
+		Notes:         r.Notes,
+	}
+}
