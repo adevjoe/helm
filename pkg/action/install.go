@@ -220,8 +220,7 @@ func (i *Install) installCRDs(crds []chart.CRD) error {
 //
 // If DryRun is set to true, this will prepare the release, but not install it
 
-func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
-	ctx := context.Background()
+func (i *Install) Run(ctx context.Context, chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
 	return i.RunWithContext(ctx, chrt, vals)
 }
 

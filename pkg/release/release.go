@@ -47,3 +47,31 @@ func (r *Release) SetStatus(status Status, msg string) {
 	r.Info.Status = status
 	r.Info.Description = msg
 }
+
+// Deepcopy xx
+func (r *Release) Deepcopy() *Release {
+	if r == nil {
+		return r
+	}
+	result := &Release{
+		Name:      r.Name,
+		Info:      r.Info.Deepcopy(),
+		Chart:     r.Chart.Deepcopy(),
+		Config:    make(map[string]interface{}, 0),
+		Manifest:  r.Manifest,
+		Hooks:     make([]*Hook, 0),
+		Version:   r.Version,
+		Namespace: r.Namespace,
+		Labels:    make(map[string]string, 0),
+	}
+	for k, v := range r.Config {
+		result.Config[k] = v
+	}
+	for _, v := range r.Hooks {
+		result.Hooks = append(result.Hooks, v)
+	}
+	for k, v := range r.Labels {
+		result.Labels[k] = v
+	}
+	return result
+}
