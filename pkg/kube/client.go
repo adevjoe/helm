@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -55,6 +56,7 @@ import (
 	"k8s.io/client-go/rest"
 	cachetools "k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/client-go/util/retry"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -123,7 +125,22 @@ func (c *Client) IsReachable() error {
 	if err != nil {
 		return errors.Wrap(err, "Kubernetes cluster unreachable")
 	}
-	if _, err := client.ServerVersion(); err != nil {
+	do := func() error {
+		_, err = client.RESTClient().Get().AbsPath("/version").Do(context.TODO()).Raw()
+		return err
+	}
+	retriable := func(err error) bool {
+		if !errors.Is(err, &url.Error{}) {
+			return false
+		}
+		uerr := err.(*url.Error)
+		if uerr.Timeout() {
+			return true
+		}
+		return false
+	}
+	err = retry.OnError(retry.DefaultRetry, retriable, do)
+	if err != nil {
 		return errors.Wrap(err, "Kubernetes cluster unreachable")
 	}
 	return nil

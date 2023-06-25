@@ -129,8 +129,7 @@ func (u *Upgrade) SetRegistryClient(client *registry.Client) {
 }
 
 // Run executes the upgrade on the given release.
-func (u *Upgrade) Run(name string, chart *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
-	ctx := context.Background()
+func (u *Upgrade) Run(ctx context.Context, name string, chart *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
 	return u.RunWithContext(ctx, name, chart, vals)
 }
 
