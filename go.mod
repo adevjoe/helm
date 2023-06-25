@@ -2,6 +2,8 @@ module helm.sh/helm/v3
 
 go 1.19
 
+replace k8s.io/kubernetes => k8s.io/kubernetes v1.26.5
+
 require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -9,6 +11,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/Masterminds/vcs v1.13.3
+	github.com/Tencent/bk-bcs/bcs-scenarios/kourse v0.0.0-20230620131944-108c92952073
 	github.com/asaskevich/govalidator v0.0.0-20200428143746-21a406dcc535
 	github.com/containerd/containerd v1.7.0
 	github.com/cyphar/filepath-securejoin v0.2.3
@@ -159,6 +162,7 @@ require (
 	gotest.tools/v3 v3.4.0 // indirect
 	k8s.io/component-base v0.27.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect
+	k8s.io/kubernetes v0.0.0-00010101000000-000000000000 // indirect
 	k8s.io/utils v0.0.0-20230220204549-a5ecb0141aa5 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.2 // indirect
