@@ -326,9 +326,12 @@ func (u *Upgrade) performUpgrade(ctx context.Context, originalRelease, upgradedR
 		}
 	}
 
-	toBeUpdated, err := existingResourceConflict(toBeCreated, upgradedRelease.Name, upgradedRelease.Namespace)
-	if err != nil {
-		return nil, errors.Wrap(err, "Unable to continue with update")
+	var toBeUpdated kube.ResourceList
+	if !u.DryRun {
+		toBeUpdated, err = existingResourceConflict(toBeCreated, upgradedRelease.Name, upgradedRelease.Namespace)
+		if err != nil {
+			return nil, errors.Wrap(err, "rendered manifests contain a resource that already exists. Unable to continue with update")
+		}
 	}
 
 	toBeUpdated.Visit(func(r *resource.Info, err error) error {
