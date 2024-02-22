@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kblabels "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/validation"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -92,6 +93,11 @@ func (secrets *Secrets) Get(key string) (*rspb.Release, error) {
 // secret fails to retrieve the releases.
 func (secrets *Secrets) List(filter func(*rspb.Release) bool) ([]*rspb.Release, error) {
 	lsel := kblabels.Set{"owner": "helm"}.AsSelector()
+	requirement, err := kblabels.NewRequirement("status", selection.NotEquals, []string{"superseded"})
+	if err != nil {
+		return nil, err
+	}
+	lsel = lsel.Add(*requirement)
 	opts := metav1.ListOptions{LabelSelector: lsel.String()}
 
 	list, err := secrets.impl.List(context.Background(), opts)
