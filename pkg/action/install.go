@@ -220,8 +220,7 @@ func (i *Install) installCRDs(crds []chart.CRD) error {
 //
 // If DryRun is set to true, this will prepare the release, but not install it
 
-func (i *Install) Run(chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
-	ctx := context.Background()
+func (i *Install) Run(ctx context.Context, chrt *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
 	return i.RunWithContext(ctx, chrt, vals)
 }
 
@@ -444,7 +443,7 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 	var err error
 	// pre-install hooks
 	if !i.DisableHooks {
-		if err := i.cfg.execHook(rel, release.HookPreInstall, i.Timeout); err != nil {
+		if err := i.cfg.execHook(rel, release.HookPreInstall, i.Timeout, !i.DisableOpenAPIValidation); err != nil {
 			return rel, fmt.Errorf("failed pre-install: %s", err)
 		}
 	}
@@ -473,7 +472,7 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 	}
 
 	if !i.DisableHooks {
-		if err := i.cfg.execHook(rel, release.HookPostInstall, i.Timeout); err != nil {
+		if err := i.cfg.execHook(rel, release.HookPostInstall, i.Timeout, !i.DisableOpenAPIValidation); err != nil {
 			return rel, fmt.Errorf("failed post-install: %s", err)
 		}
 	}

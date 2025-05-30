@@ -171,3 +171,41 @@ func hasManifestExtension(fname string) bool {
 	ext := filepath.Ext(fname)
 	return strings.EqualFold(ext, ".yaml") || strings.EqualFold(ext, ".yml") || strings.EqualFold(ext, ".json")
 }
+
+// Deepcopy xxx
+func (ch *Chart) Deepcopy() *Chart {
+	if ch == nil {
+		return ch
+	}
+	var meta Metadata
+	if ch.Metadata != nil {
+		meta = *ch.Metadata
+	}
+	var lock Lock
+	if ch.Lock != nil {
+		lock = *ch.Lock
+	}
+	c := &Chart{
+		Raw:       make([]*File, 0),
+		Metadata:  &meta,
+		Lock:      &lock,
+		Templates: make([]*File, 0),
+		Values:    make(map[string]interface{}, 0),
+		Schema:    []byte{},
+		Files:     make([]*File, 0),
+	}
+	for _, v := range ch.Raw {
+		c.Raw = append(c.Raw, v.Deepcopy())
+	}
+	for _, v := range ch.Templates {
+		c.Templates = append(c.Templates, v.Deepcopy())
+	}
+	for k, v := range ch.Values {
+		c.Values[k] = v
+	}
+	copy(c.Schema, ch.Schema)
+	for _, v := range ch.Files {
+		c.Files = append(c.Files, v.Deepcopy())
+	}
+	return c
+}

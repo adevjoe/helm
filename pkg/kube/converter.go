@@ -19,6 +19,7 @@ package kube // import "helm.sh/helm/v3/pkg/kube"
 import (
 	"sync"
 
+	gameworkloadv1alpha1 "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/apis/tkex/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -64,6 +65,8 @@ func kubernetesNativeScheme() *runtime.Scheme {
 		// and must thus be added separately.
 		apiextensionsv1beta1.AddToScheme(k8sNativeScheme)
 		apiextensionsv1.AddToScheme(k8sNativeScheme)
+		// Add Game Workload scheme
+		gameworkloadv1alpha1.AddToScheme(k8sNativeScheme)
 	})
 	return k8sNativeScheme
 }

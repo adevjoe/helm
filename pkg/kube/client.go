@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	gameworkloadv1alpha1 "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/apis/tkex/v1alpha1"
+	gameworkloadclient "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/client/clientset/versioned"
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/pkg/errors"
 	batch "k8s.io/api/batch/v1"
@@ -83,7 +86,8 @@ type Client struct {
 	// Namespace allows to bypass the kubeconfig file for the choice of the namespace
 	Namespace string
 
-	kubeClient *kubernetes.Clientset
+	kubeClient     *kubernetes.Clientset
+	gameKubeClient *gameworkloadclient.Clientset
 }
 
 func init() {
@@ -120,6 +124,20 @@ func (c *Client) getKubeClient() (*kubernetes.Clientset, error) {
 	return c.kubeClient, err
 }
 
+// getGameKubeClient get or create a new KubernetesClientSet
+func (c *Client) getGameKubeClient() (*gameworkloadclient.Clientset, error) {
+	var err error
+	if c.gameKubeClient == nil {
+		conf, err := c.Factory.ToRawKubeConfigLoader().ClientConfig()
+		if err != nil {
+			return nil, err
+		}
+		c.gameKubeClient, err = gameworkloadclient.NewForConfig(conf)
+	}
+
+	return c.gameKubeClient, err
+}
+
 // IsReachable tests connectivity to the cluster.
 func (c *Client) IsReachable() error {
 	client, err := c.getKubeClient()
@@ -131,7 +149,22 @@ func (c *Client) IsReachable() error {
 	if err != nil {
 		return errors.Wrap(err, "Kubernetes cluster unreachable")
 	}
-	if _, err := client.ServerVersion(); err != nil {
+	do := func() error {
+		_, err = client.RESTClient().Get().AbsPath("/version").Do(context.TODO()).Raw()
+		return err
+	}
+	retriable := func(err error) bool {
+		if !errors.Is(err, &url.Error{}) {
+			return false
+		}
+		uerr := err.(*url.Error)
+		if uerr.Timeout() {
+			return true
+		}
+		return false
+	}
+	err = retry.OnError(retry.DefaultRetry, retriable, do)
+	if err != nil {
 		return errors.Wrap(err, "Kubernetes cluster unreachable")
 	}
 	return nil
@@ -287,7 +320,11 @@ func (c *Client) Wait(resources ResourceList, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	checker := NewReadyChecker(cs, c.Log, PausedAsReady(true))
+	gc, err := c.getGameKubeClient()
+	if err != nil {
+		return err
+	}
+	checker := NewReadyChecker(cs, gc, c.Log, PausedAsReady(true))
 	w := waiter{
 		c:       checker,
 		log:     c.Log,
@@ -302,7 +339,11 @@ func (c *Client) WaitWithJobs(resources ResourceList, timeout time.Duration) err
 	if err != nil {
 		return err
 	}
-	checker := NewReadyChecker(cs, c.Log, PausedAsReady(true), CheckJobs(true))
+	gc, err := c.getGameKubeClient()
+	if err != nil {
+		return err
+	}
+	checker := NewReadyChecker(cs, gc, c.Log, PausedAsReady(true), CheckJobs(true))
 	w := waiter{
 		c:       checker,
 		log:     c.Log,
@@ -652,7 +693,10 @@ func createPatch(target *resource.Info, current runtime.Object) ([]byte, types.P
 	// On newer K8s versions, CRDs aren't unstructured but has this dedicated type
 	_, isCRD := versionedObject.(*apiextv1beta1.CustomResourceDefinition)
 
-	if isUnstructured || isCRD {
+	// GameWorkload are unstructured but has this dedicated type
+	isGameWorkload := isGameWorkload(versionedObject)
+
+	if isUnstructured || isCRD || isGameWorkload {
 		// fall back to generic JSON merge patch
 		patch, err := jsonpatch.CreateMergePatch(oldData, newData)
 		return patch, types.MergePatchType, err
@@ -665,6 +709,22 @@ func createPatch(target *resource.Info, current runtime.Object) ([]byte, types.P
 
 	patch, err := strategicpatch.CreateThreeWayMergePatch(oldData, newData, currentData, patchMeta, true)
 	return patch, types.StrategicMergePatchType, err
+}
+
+func isGameWorkload(obj runtime.Object) bool {
+	if _, ok := obj.(*gameworkloadv1alpha1.GameDeployment); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.GameStatefulSet); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.HookRun); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.HookTemplate); ok {
+		return true
+	}
+	return false
 }
 
 func updateResource(c *Client, target *resource.Info, currentObj runtime.Object, force bool) error {

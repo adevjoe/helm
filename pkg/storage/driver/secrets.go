@@ -23,11 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/ristretto"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kblabels "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/validation"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -42,16 +44,25 @@ const SecretsDriverName = "Secret"
 // Secrets is a wrapper around an implementation of a kubernetes
 // SecretsInterface.
 type Secrets struct {
-	impl corev1.SecretInterface
-	Log  func(string, ...interface{})
+	impl  corev1.SecretInterface
+	Log   func(string, ...interface{})
+	cache *ristretto.Cache
 }
+
+var cache, _ = ristretto.NewCache(&ristretto.Config{
+	NumCounters: 1e7,      // number of keys to track frequency of (10M).
+	MaxCost:     16 << 30, // maximum cost of cache (16GB).
+	BufferItems: 64,       // number of keys per Get buffer.
+	Metrics:     true,
+})
 
 // NewSecrets initializes a new Secrets wrapping an implementation of
 // the kubernetes SecretsInterface.
 func NewSecrets(impl corev1.SecretInterface) *Secrets {
 	return &Secrets{
-		impl: impl,
-		Log:  func(_ string, _ ...interface{}) {},
+		impl:  impl,
+		Log:   func(_ string, _ ...interface{}) {},
+		cache: cache,
 	}
 }
 
@@ -82,6 +93,11 @@ func (secrets *Secrets) Get(key string) (*rspb.Release, error) {
 // secret fails to retrieve the releases.
 func (secrets *Secrets) List(filter func(*rspb.Release) bool) ([]*rspb.Release, error) {
 	lsel := kblabels.Set{"owner": "helm"}.AsSelector()
+	requirement, err := kblabels.NewRequirement("status", selection.NotEquals, []string{"superseded"})
+	if err != nil {
+		return nil, err
+	}
+	lsel = lsel.Add(*requirement)
 	opts := metav1.ListOptions{LabelSelector: lsel.String()}
 
 	list, err := secrets.impl.List(context.Background(), opts)
@@ -89,24 +105,9 @@ func (secrets *Secrets) List(filter func(*rspb.Release) bool) ([]*rspb.Release, 
 		return nil, errors.Wrap(err, "list: failed to list")
 	}
 
-	var results []*rspb.Release
-
 	// iterate over the secrets object list
 	// and decode each release
-	for _, item := range list.Items {
-		rls, err := decodeRelease(string(item.Data["release"]))
-		if err != nil {
-			secrets.Log("list: failed to decode release: %v: %s", item, err)
-			continue
-		}
-
-		rls.Labels = item.ObjectMeta.Labels
-
-		if filter(rls) {
-			results = append(results, rls)
-		}
-	}
-	return results, nil
+	return secrets.cacheDecodeReleases(list, filter), nil
 }
 
 // Query fetches all releases that match the provided map of labels.
@@ -131,17 +132,7 @@ func (secrets *Secrets) Query(labels map[string]string) ([]*rspb.Release, error)
 		return nil, ErrReleaseNotFound
 	}
 
-	var results []*rspb.Release
-	for _, item := range list.Items {
-		rls, err := decodeRelease(string(item.Data["release"]))
-		if err != nil {
-			secrets.Log("query: failed to decode release: %s", err)
-			continue
-		}
-		rls.Labels = item.ObjectMeta.Labels
-		results = append(results, rls)
-	}
-	return results, nil
+	return secrets.cacheDecodeReleases(list, nil), nil
 }
 
 // Create creates a new Secret holding the release. If the
