@@ -142,8 +142,7 @@ func (u *Upgrade) SetRegistryClient(client *registry.Client) {
 }
 
 // Run executes the upgrade on the given release.
-func (u *Upgrade) Run(name string, chart *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
-	ctx := context.Background()
+func (u *Upgrade) Run(ctx context.Context, name string, chart *chart.Chart, vals map[string]interface{}) (*release.Release, error) {
 	return u.RunWithContext(ctx, name, chart, vals)
 }
 
@@ -346,8 +345,11 @@ func (u *Upgrade) performUpgrade(ctx context.Context, originalRelease, upgradedR
 	var toBeUpdated kube.ResourceList
 	if u.TakeOwnership {
 		toBeUpdated, err = requireAdoption(toBeCreated)
-	} else {
+	} else if !u.DryRun {
 		toBeUpdated, err = existingResourceConflict(toBeCreated, upgradedRelease.Name, upgradedRelease.Namespace)
+		if err != nil {
+			return nil, errors.Wrap(err, "rendered manifests contain a resource that already exists. Unable to continue with update")
+		}
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to continue with update")
@@ -418,7 +420,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 	// pre-upgrade hooks
 
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.Timeout); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.Timeout, !u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, kube.ResourceList{}, fmt.Errorf("pre-upgrade hooks failed: %s", err))
 			return
 		}
@@ -464,7 +466,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 
 	// post-upgrade hooks
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.Timeout); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.Timeout, !u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, results.Created, fmt.Errorf("post-upgrade hooks failed: %s", err))
 			return
 		}

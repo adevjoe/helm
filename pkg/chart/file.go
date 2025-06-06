@@ -25,3 +25,16 @@ type File struct {
 	// Data is the template as byte data.
 	Data []byte `json:"data"`
 }
+
+// Deepcopy xxx
+func (f *File) Deepcopy() *File {
+	if f == nil {
+		return f
+	}
+	var d []byte
+	copy(d, f.Data)
+	return &File{
+		Name: f.Name,
+		Data: d,
+	}
+}

@@ -793,7 +793,7 @@ func Test_ReadyChecker_deploymentReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			if got := c.deploymentReady(tt.args.rs, tt.args.dep); got != tt.want {
 				t.Errorf("deploymentReady() = %v, want %v", got, tt.want)
 			}
@@ -916,7 +916,7 @@ func Test_ReadyChecker_daemonSetReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			if got := c.daemonSetReady(tt.args.ds); got != tt.want {
 				t.Errorf("daemonSetReady() = %v, want %v", got, tt.want)
 			}
@@ -992,7 +992,7 @@ func Test_ReadyChecker_statefulSetReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			if got := c.statefulSetReady(tt.args.sts); got != tt.want {
 				t.Errorf("statefulSetReady() = %v, want %v", got, tt.want)
 			}
@@ -1051,7 +1051,7 @@ func Test_ReadyChecker_podsReadyForObject(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			for _, pod := range tt.existPods {
 				if _, err := c.client.CoreV1().Pods(defaultNamespace).Create(context.TODO(), &pod, metav1.CreateOptions{}); err != nil {
 					t.Errorf("Failed to create Pod error: %v", err)
@@ -1130,7 +1130,7 @@ func Test_ReadyChecker_jobReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			got, err := c.jobReady(tt.args.job)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("jobReady() error = %v, wantErr %v", err, tt.wantErr)
@@ -1169,7 +1169,7 @@ func Test_ReadyChecker_volumeReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewReadyChecker(fake.NewSimpleClientset(), nil)
+			c := NewReadyChecker(fake.NewSimpleClientset(), nil, nil)
 			if got := c.volumeReady(tt.args.v); got != tt.want {
 				t.Errorf("volumeReady() = %v, want %v", got, tt.want)
 			}

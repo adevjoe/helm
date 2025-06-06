@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	gameworkloadv1alpha1 "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/apis/tkex/v1alpha1"
+	gameworkloadclient "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/client/clientset/versioned"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
@@ -60,10 +62,12 @@ func CheckJobs(checkJobs bool) ReadyCheckerOption {
 
 // NewReadyChecker creates a new checker. Passed ReadyCheckerOptions can
 // be used to override defaults.
-func NewReadyChecker(cl kubernetes.Interface, log func(string, ...interface{}), opts ...ReadyCheckerOption) ReadyChecker {
+func NewReadyChecker(cl kubernetes.Interface, gameClient gameworkloadclient.Interface, log func(string, ...interface{}),
+	opts ...ReadyCheckerOption) ReadyChecker {
 	c := ReadyChecker{
-		client: cl,
-		log:    log,
+		client:     cl,
+		gameClient: gameClient,
+		log:        log,
 	}
 	if c.log == nil {
 		c.log = nopLogger
@@ -77,6 +81,7 @@ func NewReadyChecker(cl kubernetes.Interface, log func(string, ...interface{}), 
 // ReadyChecker is a type that can check core Kubernetes types for readiness.
 type ReadyChecker struct {
 	client        kubernetes.Interface
+	gameClient    gameworkloadclient.Interface
 	log           func(string, ...interface{})
 	checkJobs     bool
 	pausedAsReady bool
@@ -174,6 +179,27 @@ func (c *ReadyChecker) IsReady(ctx context.Context, v *resource.Info) (bool, err
 			return false, err
 		}
 		if !c.statefulSetReady(sts) {
+			return false, nil
+		}
+	// Tencent gameworkload
+	case *gameworkloadv1alpha1.GameDeployment:
+		deploy, err := c.gameClient.TkexV1alpha1().GameDeployments(v.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		// If paused deployment will never be ready
+		if deploy.Spec.UpdateStrategy.Paused {
+			return c.pausedAsReady, nil
+		}
+		if !c.gameDeploymentReady(deploy) {
+			return false, nil
+		}
+	case *gameworkloadv1alpha1.GameStatefulSet:
+		gamests, err := c.gameClient.TkexV1alpha1().GameStatefulSets(v.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if !c.gameStatefulSetReady(gamests) {
 			return false, nil
 		}
 	case *corev1.ReplicationController:
@@ -434,6 +460,70 @@ func (c *ReadyChecker) statefulSetReady(sts *appsv1.StatefulSet) bool {
 	}
 
 	c.log("StatefulSet is ready: %s/%s. %d out of %d expected pods are ready", sts.Namespace, sts.Name, sts.Status.ReadyReplicas, replicas)
+	return true
+}
+
+func (c *ReadyChecker) gameDeploymentReady(dep *gameworkloadv1alpha1.GameDeployment) bool {
+	expectedReady := *dep.Spec.Replicas - deploymentutil.GameMaxUnavailable(*dep)
+	if !(dep.Status.UpdatedReadyReplicas >= expectedReady) {
+		c.log("GameDeployment is not ready: %s/%s. %d out of %d expected pods are ready", dep.Namespace, dep.Name, dep.Status.UpdatedReadyReplicas, expectedReady)
+		return false
+	}
+	return true
+}
+
+func (c *ReadyChecker) gameStatefulSetReady(sts *gameworkloadv1alpha1.GameStatefulSet) bool {
+	// If the update strategy is not a rolling update, there will be nothing to wait for
+	if sts.Spec.UpdateStrategy.Type != gameworkloadv1alpha1.RollingUpdateGameStatefulSetStrategyType {
+		c.log("GameStatefulSet skipped ready check: %s/%s. updateStrategy is %v", sts.Namespace, sts.Name, sts.Spec.UpdateStrategy.Type)
+		return true
+	}
+
+	// Make sure the status is up-to-date with the StatefulSet changes
+	if sts.Status.ObservedGeneration < sts.Generation {
+		c.log("GameStatefulSet is not ready: %s/%s. update has not yet been observed", sts.Namespace, sts.Name)
+		return false
+	}
+
+	// Dereference all the pointers because StatefulSets like them
+	var partition int
+	// 1 is the default for replicas if not set
+	var replicas = 1
+	// For some reason, even if the update strategy is a rolling update, the
+	// actual rollingUpdate field can be nil. If it is, we can safely assume
+	// there is no partition value
+	if sts.Spec.UpdateStrategy.RollingUpdate != nil && sts.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
+		partition = int(sts.Spec.UpdateStrategy.RollingUpdate.Partition.IntVal)
+	}
+	if sts.Spec.Replicas != nil {
+		replicas = int(*sts.Spec.Replicas)
+	}
+
+	// Because an update strategy can use partitioning, we need to calculate the
+	// number of updated replicas we should have. For example, if the replicas
+	// is set to 3 and the partition is 2, we'd expect only one pod to be
+	// updated
+	expectedReplicas := replicas - partition
+
+	// Make sure all the updated pods have been scheduled
+	if int(sts.Status.UpdatedReadyReplicas) < expectedReplicas {
+		c.log("GameStatefulSet is not ready: %s/%s. %d out of %d expected pods have been scheduled", sts.Namespace, sts.Name, sts.Status.UpdatedReplicas, expectedReplicas)
+		return false
+	}
+
+	if int(sts.Status.UpdatedReadyReplicas) != replicas {
+		c.log("GameStatefulSet is not ready: %s/%s. %d out of %d expected pods are ready", sts.Namespace, sts.Name, sts.Status.ReadyReplicas, replicas)
+		return false
+	}
+	// This check only makes sense when all partitions are being upgraded otherwise during a
+	// partioned rolling upgrade, this condition will never evaluate to true, leading to
+	// error.
+	if partition == 0 && sts.Status.CurrentRevision != sts.Status.UpdateRevision {
+		c.log("GameStatefulSet is not ready: %s/%s. currentRevision %s does not yet match updateRevision %s", sts.Namespace, sts.Name, sts.Status.CurrentRevision, sts.Status.UpdateRevision)
+		return false
+	}
+
+	c.log("GameStatefulSet is ready: %s/%s. %d out of %d expected pods are ready", sts.Namespace, sts.Name, sts.Status.ReadyReplicas, replicas)
 	return true
 }
 
