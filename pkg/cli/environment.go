@@ -130,6 +130,8 @@ func New() *EnvSettings {
 			config.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 				return &kube.RetryingRoundTripper{Wrapped: rt}
 			})
+			config.ContentType = "application/json"
+			config.AcceptContentTypes = "application/json"
 			config.UserAgent = version.GetUserAgent()
 			return config
 		},
