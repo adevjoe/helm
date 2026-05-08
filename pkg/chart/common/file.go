@@ -29,3 +29,16 @@ type File struct {
 	// ModTime is the file's mod-time
 	ModTime time.Time `json:"modtime,omitzero"`
 }
+
+// Deepcopy xxx
+func (f *File) Deepcopy() *File {
+	if f == nil {
+		return f
+	}
+	var d []byte
+	copy(d, f.Data)
+	return &File{
+		Name: f.Name,
+		Data: d,
+	}
+}

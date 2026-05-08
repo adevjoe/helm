@@ -53,6 +53,21 @@ type infoJSON struct {
 	Resources     map[string][]runtime.Object `json:"resources,omitempty"`
 }
 
+// Deepcopy xx
+func (r *Info) Deepcopy() *Info {
+	if r == nil {
+		return r
+	}
+	return &Info{
+		FirstDeployed: r.FirstDeployed,
+		LastDeployed:  r.LastDeployed,
+		Deleted:       r.Deleted,
+		Description:   r.Description,
+		Status:        r.Status,
+		Notes:         r.Notes,
+	}
+}
+
 // UnmarshalJSON implements the json.Unmarshaler interface.
 // It handles empty string time fields by treating them as zero values.
 func (i *Info) UnmarshalJSON(data []byte) error {

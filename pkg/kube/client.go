@@ -25,12 +25,15 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
 
+	gameworkloadv1alpha1 "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/apis/tkex/v1alpha1"
+	gameworkloadclient "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/client/clientset/versioned"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	v1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -92,10 +95,12 @@ type Client struct {
 	WaitContext context.Context
 
 	Waiter
-	kubeClient kubernetes.Interface
 
 	// Embed a LogHolder to provide logger functionality
 	logging.LogHolder
+
+	kubeClient     *kubernetes.Clientset
+	gameKubeClient *gameworkloadclient.Clientset
 }
 
 var _ Interface = (*Client)(nil)
@@ -191,7 +196,11 @@ func (c *Client) GetWaiterWithOptions(strategy WaitStrategy, opts ...WaitOption)
 		if err != nil {
 			return nil, err
 		}
-		return &legacyWaiter{kubeClient: kc, ctx: c.WaitContext}, nil
+		gc, err := c.getGameKubeClient()
+		if err != nil {
+			return nil, err
+		}
+		return &legacyWaiter{kubeClient: kc, gameKubeClient: gc, ctx: c.WaitContext}, nil
 	case StatusWatcherStrategy:
 		return c.newStatusWatcher(opts...)
 	case HookOnlyStrategy:
@@ -243,6 +252,20 @@ func (c *Client) getKubeClient() (kubernetes.Interface, error) {
 	return c.kubeClient, err
 }
 
+// getGameKubeClient get or create a new KubernetesClientSet
+func (c *Client) getGameKubeClient() (*gameworkloadclient.Clientset, error) {
+	var err error
+	if c.gameKubeClient == nil {
+		conf, err := c.Factory.ToRawKubeConfigLoader().ClientConfig()
+		if err != nil {
+			return nil, err
+		}
+		c.gameKubeClient, err = gameworkloadclient.NewForConfig(conf)
+	}
+
+	return c.gameKubeClient, err
+}
+
 // IsReachable tests connectivity to the cluster.
 func (c *Client) IsReachable() error {
 	client, err := c.getKubeClient()
@@ -254,7 +277,22 @@ func (c *Client) IsReachable() error {
 	if err != nil {
 		return fmt.Errorf("kubernetes cluster unreachable: %w", err)
 	}
-	if _, err := client.Discovery().ServerVersion(); err != nil {
+	do := func() error {
+		_, err = client.Discovery().RESTClient().Get().AbsPath("/version").Do(context.TODO()).Raw()
+		return err
+	}
+	retriable := func(err error) bool {
+		if !errors.Is(err, &url.Error{}) {
+			return false
+		}
+		uerr := err.(*url.Error)
+		if uerr.Timeout() {
+			return true
+		}
+		return false
+	}
+	err = retry.OnError(retry.DefaultRetry, retriable, do)
+	if err != nil {
 		return fmt.Errorf("kubernetes cluster unreachable: %w", err)
 	}
 	return nil
@@ -1073,7 +1111,9 @@ func createPatch(original runtime.Object, target *resource.Info, threeWayMergeFo
 	// On newer K8s versions, CRDs aren't unstructured but has this dedicated type
 	_, isCRD := versionedObject.(*apiextv1beta1.CustomResourceDefinition)
 
-	if isUnstructured || isCRD {
+	isGameWorkload := isGameWorkload(versionedObject)
+
+	if isUnstructured || isCRD || isGameWorkload {
 		if threeWayMergeForUnstructured {
 			// from https://github.com/kubernetes/kubectl/blob/b83b2ec7d15f286720bccf7872b5c72372cb8e80/pkg/cmd/apply/patcher.go#L129
 			preconditions := []mergepatch.PreconditionFunc{
@@ -1099,6 +1139,22 @@ func createPatch(original runtime.Object, target *resource.Info, threeWayMergeFo
 
 	patch, err := strategicpatch.CreateThreeWayMergePatch(oldData, newData, currentData, patchMeta, true)
 	return patch, types.StrategicMergePatchType, err
+}
+
+func isGameWorkload(obj runtime.Object) bool {
+	if _, ok := obj.(*gameworkloadv1alpha1.GameDeployment); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.GameStatefulSet); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.HookRun); ok {
+		return true
+	}
+	if _, ok := obj.(*gameworkloadv1alpha1.HookTemplate); ok {
+		return true
+	}
+	return false
 }
 
 func replaceResource(target *resource.Info, fieldValidationDirective FieldValidationDirective) error {

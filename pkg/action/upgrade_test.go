@@ -96,7 +96,7 @@ func TestUpgradeRelease_Wait(t *testing.T) {
 	upAction.WaitStrategy = kube.StatusWatcherStrategy
 	vals := map[string]any{}
 
-	resi, err := upAction.Run(rel.Name, buildChart(), vals)
+	resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 	req.Error(err)
 	res, err := releaserToV1Release(resi)
 	is.NoError(err)
@@ -121,7 +121,7 @@ func TestUpgradeRelease_WaitForJobs(t *testing.T) {
 	upAction.WaitForJobs = true
 	vals := map[string]any{}
 
-	resi, err := upAction.Run(rel.Name, buildChart(), vals)
+	resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 	req.Error(err)
 	res, err := releaserToV1Release(resi)
 	is.NoError(err)
@@ -147,7 +147,7 @@ func TestUpgradeRelease_CleanupOnFail(t *testing.T) {
 	upAction.CleanupOnFail = true
 	vals := map[string]any{}
 
-	resi, err := upAction.Run(rel.Name, buildChart(), vals)
+	resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 	req.Error(err)
 	is.NotContains(err.Error(), "unable to cleanup resources")
 	res, err := releaserToV1Release(resi)
@@ -175,7 +175,7 @@ func TestUpgradeRelease_RollbackOnFailure(t *testing.T) {
 		upAction.RollbackOnFailure = true
 		vals := map[string]any{}
 
-		resi, err := upAction.Run(rel.Name, buildChart(), vals)
+		resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 		req.Error(err)
 		is.Contains(err.Error(), "arming key removed")
 		is.Contains(err.Error(), "rollback-on-failure")
@@ -204,7 +204,7 @@ func TestUpgradeRelease_RollbackOnFailure(t *testing.T) {
 		upAction.RollbackOnFailure = true
 		vals := map[string]any{}
 
-		_, err := upAction.Run(rel.Name, buildChart(), vals)
+		_, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 		req.Error(err)
 		is.Contains(err.Error(), "update fail")
 		is.Contains(err.Error(), "an error occurred while rolling back the release")
@@ -244,7 +244,7 @@ func TestUpgradeRelease_ReuseValues(t *testing.T) {
 
 		upAction.ReuseValues = true
 		// setting newValues and upgrading
-		resi, err := upAction.Run(rel.Name, buildChart(), newValues)
+		resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), newValues)
 		is.NoError(err)
 		res, err := releaserToV1Release(resi)
 		is.NoError(err)
@@ -311,7 +311,7 @@ func TestUpgradeRelease_ReuseValues(t *testing.T) {
 			withMetadataDependency(dependency),
 		)
 		// reusing values and upgrading
-		resi, err := upAction.Run(rel.Name, sampleChartWithSubChart, map[string]any{})
+		resi, err := upAction.Run(context.Background(), rel.Name, sampleChartWithSubChart, map[string]any{})
 		is.NoError(err)
 		res, err := releaserToV1Release(resi)
 		is.NoError(err)
@@ -375,7 +375,7 @@ func TestUpgradeRelease_ResetThenReuseValues(t *testing.T) {
 
 		upAction.ResetThenReuseValues = true
 		// setting newValues and upgrading
-		resi, err := upAction.Run(rel.Name, buildChart(withValues(newChartValues)), newValues)
+		resi, err := upAction.Run(context.Background(), rel.Name, buildChart(withValues(newChartValues)), newValues)
 		is.NoError(err)
 		res, err := releaserToV1Release(resi)
 		is.NoError(err)
@@ -413,7 +413,7 @@ func TestUpgradeRelease_Pending(t *testing.T) {
 
 	vals := map[string]any{}
 
-	_, err := upAction.Run(rel.Name, buildChart(), vals)
+	_, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 	req.Contains(err.Error(), "progress", err)
 }
 
@@ -517,7 +517,7 @@ func TestUpgradeRelease_Labels(t *testing.T) {
 		"key3": "val3",
 	}
 	// setting newValues and upgrading
-	resi, err := upAction.Run(rel.Name, buildChart(), nil)
+	resi, err := upAction.Run(context.Background(), rel.Name, buildChart(), nil)
 	is.NoError(err)
 	res, err := releaserToV1Release(resi)
 	is.NoError(err)
@@ -571,7 +571,7 @@ func TestUpgradeRelease_SystemLabels(t *testing.T) {
 		"owner": "val3",
 	}
 	// setting newValues and upgrading
-	_, err = upAction.Run(rel.Name, buildChart(), nil)
+	_, err = upAction.Run(context.Background(), rel.Name, buildChart(), nil)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -753,7 +753,7 @@ func TestUpgradeRun_UnreachableKubeClient(t *testing.T) {
 
 	client := NewUpgrade(config)
 	vals := map[string]any{}
-	result, err := client.Run("", buildChart(), vals)
+	result, err := client.Run(context.Background(), "", buildChart(), vals)
 
 	assert.Nil(t, result)
 	assert.ErrorContains(t, err, "connection refused")
@@ -796,7 +796,7 @@ func TestUpgradeRelease_WaitOptionsPassedDownstream(t *testing.T) {
 	failer := upAction.cfg.KubeClient.(*kubefake.FailingKubeClient)
 
 	vals := map[string]any{}
-	_, err := upAction.Run(rel.Name, buildChart(), vals)
+	_, err := upAction.Run(context.Background(), rel.Name, buildChart(), vals)
 	req.NoError(err)
 
 	// Verify that WaitOptions were passed to GetWaiter

@@ -189,7 +189,7 @@ func runInstallForHooksWithSuccess(t *testing.T, manifest, expectedNamespace str
 	}
 	vals := map[string]any{}
 
-	resi, err := instAction.Run(buildChartWithTemplates(templates), vals)
+	resi, err := instAction.Run(context.Background(), buildChartWithTemplates(templates), vals)
 	is.NoError(err)
 	res, err := releaserToV1Release(resi)
 	is.NoError(err)
@@ -219,7 +219,7 @@ func runInstallForHooksWithFailure(t *testing.T, manifest, expectedNamespace str
 	}
 	vals := map[string]any{}
 
-	resi, err := instAction.Run(buildChartWithTemplates(templates), vals)
+	resi, err := instAction.Run(context.Background(), buildChartWithTemplates(templates), vals)
 	is.Error(err)
 	res, err := releaserToV1Release(resi)
 	is.NoError(err)
@@ -396,7 +396,7 @@ data:
 			}
 
 			serverSideApply := true
-			err := configuration.execHook(&tc.inputRelease, hookEvent, kube.StatusWatcherStrategy, nil, 600, serverSideApply)
+			err := configuration.execHook(&tc.inputRelease, hookEvent, kube.StatusWatcherStrategy, nil, 600, serverSideApply, false)
 
 			if !reflect.DeepEqual(kubeClient.deleteRecord, tc.expectedDeleteRecord) {
 				t.Fatalf("Got unexpected delete record, expected: %#v, but got: %#v", kubeClient.deleteRecord, tc.expectedDeleteRecord)
@@ -486,7 +486,7 @@ data:
 	ctx := context.Background()
 	waitOptions := []kube.WaitOption{kube.WithWaitContext(ctx)}
 
-	err := configuration.execHook(rel, release.HookPreInstall, kube.StatusWatcherStrategy, waitOptions, 600, false)
+	err := configuration.execHook(rel, release.HookPreInstall, kube.StatusWatcherStrategy, waitOptions, 600, false, false)
 	is.NoError(err)
 
 	// Verify that WaitOptions were passed to GetWaiter

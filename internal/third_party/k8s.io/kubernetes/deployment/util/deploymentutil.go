@@ -20,6 +20,7 @@ import (
 	"context"
 	"sort"
 
+	gameworkloadv1alpha1 "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/apis/tkex/v1alpha1"
 	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -141,6 +142,24 @@ func MaxUnavailable(deployment apps.Deployment) int32 {
 	}
 	// Error caught by validation
 	_, maxUnavailable, _ := ResolveFenceposts(deployment.Spec.Strategy.RollingUpdate.MaxSurge, deployment.Spec.Strategy.RollingUpdate.MaxUnavailable, *(deployment.Spec.Replicas))
+	if maxUnavailable > *deployment.Spec.Replicas {
+		return *deployment.Spec.Replicas
+	}
+	return maxUnavailable
+}
+
+// GameIsRollingUpdate returns true if the strategy type is a rolling update for gameworkload.
+func GameIsRollingUpdate(deployment *gameworkloadv1alpha1.GameDeployment) bool {
+	return deployment.Spec.UpdateStrategy.Type == gameworkloadv1alpha1.RollingGameDeploymentUpdateStrategyType
+}
+
+// GameMaxUnavailable returns the maximum unavailable pods a rolling deployment can take for gameworkload.
+func GameMaxUnavailable(deployment gameworkloadv1alpha1.GameDeployment) int32 {
+	if !GameIsRollingUpdate(&deployment) || *(deployment.Spec.Replicas) == 0 {
+		return int32(0)
+	}
+	// Error caught by validation
+	_, maxUnavailable, _ := ResolveFenceposts(deployment.Spec.UpdateStrategy.MaxSurge, deployment.Spec.UpdateStrategy.MaxUnavailable, *(deployment.Spec.Replicas))
 	if maxUnavailable > *deployment.Spec.Replicas {
 		return *deployment.Spec.Replicas
 	}
