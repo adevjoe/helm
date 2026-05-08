@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"time"
 
+	gameworkloadclient "github.com/Tencent/bk-bcs/bcs-scenarios/kourse/pkg/client/clientset/versioned"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
@@ -48,18 +49,19 @@ import (
 // legacyWaiter is the legacy implementation of the Waiter interface. This logic was used by default in Helm 3
 // Helm 4 now uses the StatusWaiter implementation instead
 type legacyWaiter struct {
-	c          ReadyChecker
-	kubeClient *kubernetes.Clientset
-	ctx        context.Context
+	c              ReadyChecker
+	kubeClient     *kubernetes.Clientset
+	ctx            context.Context
+	gameKubeClient *gameworkloadclient.Clientset
 }
 
 func (hw *legacyWaiter) Wait(resources ResourceList, timeout time.Duration) error {
-	hw.c = NewReadyChecker(hw.kubeClient, PausedAsReady(true))
+	hw.c = NewReadyChecker(hw.kubeClient, hw.gameKubeClient, PausedAsReady(true))
 	return hw.waitForResources(resources, timeout)
 }
 
 func (hw *legacyWaiter) WaitWithJobs(resources ResourceList, timeout time.Duration) error {
-	hw.c = NewReadyChecker(hw.kubeClient, PausedAsReady(true), CheckJobs(true))
+	hw.c = NewReadyChecker(hw.kubeClient, hw.gameKubeClient, PausedAsReady(true), CheckJobs(true))
 	return hw.waitForResources(resources, timeout)
 }
 

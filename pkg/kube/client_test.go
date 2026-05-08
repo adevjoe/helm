@@ -50,7 +50,6 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
-	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -966,8 +965,8 @@ func TestGetPodList(t *testing.T) {
 		responsePodList.Items = append(responsePodList.Items, newPodWithStatus(name, v1.PodStatus{}, namespace))
 	}
 
-	kubeClient := k8sfake.NewClientset(&responsePodList)
-	c := Client{Namespace: namespace, kubeClient: kubeClient}
+	c := Client{Namespace: namespace}
+	c.kubeClient, _ = c.Factory.KubernetesClientSet()
 
 	podList, err := c.GetPodList(namespace, metav1.ListOptions{})
 	clientAssertions := assert.New(t)
@@ -980,8 +979,8 @@ func TestOutputContainerLogsForPodList(t *testing.T) {
 	namespace := "some-namespace"
 	somePodList := newPodList("jimmy", "three", "structs")
 
-	kubeClient := k8sfake.NewClientset(&somePodList)
-	c := Client{Namespace: namespace, kubeClient: kubeClient}
+	c := Client{Namespace: namespace}
+	c.kubeClient, _ = c.Factory.KubernetesClientSet()
 	outBuffer := &bytes.Buffer{}
 	outBufferFunc := func(_, _, _ string) io.Writer { return outBuffer }
 	err := c.OutputContainerLogsForPodList(&somePodList, namespace, outBufferFunc)
@@ -1358,7 +1357,7 @@ func TestIsReachable(t *testing.T) {
 			setupClient: func(t *testing.T) *Client {
 				t.Helper()
 				client := newTestClient(t)
-				client.kubeClient = k8sfake.NewClientset()
+				client.kubeClient, _ = client.Factory.KubernetesClientSet()
 				return client
 			},
 			expectError: false,

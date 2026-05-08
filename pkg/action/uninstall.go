@@ -40,15 +40,17 @@ import (
 type Uninstall struct {
 	cfg *Configuration
 
-	DisableHooks        bool
-	DryRun              bool
-	IgnoreNotFound      bool
-	KeepHistory         bool
-	WaitStrategy        kube.WaitStrategy
-	WaitOptions         []kube.WaitOption
-	DeletionPropagation string
-	Timeout             time.Duration
-	Description         string
+	DisableHooks bool
+	DryRun       bool
+
+	IgnoreNotFound           bool
+	KeepHistory              bool
+	WaitStrategy             kube.WaitStrategy
+	WaitOptions              []kube.WaitOption
+	DeletionPropagation      string
+	DisableOpenAPIValidation bool
+	Timeout                  time.Duration
+	Description              string
 }
 
 // NewUninstall creates a new Uninstall object with the given configuration.
@@ -134,7 +136,7 @@ func (u *Uninstall) Run(name string) (*releasei.UninstallReleaseResponse, error)
 
 	if !u.DisableHooks {
 		serverSideApply := true
-		if err := u.cfg.execHook(rel, release.HookPreDelete, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(rel, release.HookPreDelete, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply, !u.DisableOpenAPIValidation); err != nil {
 			return res, err
 		}
 	} else {
@@ -149,8 +151,13 @@ func (u *Uninstall) Run(name string) (*releasei.UninstallReleaseResponse, error)
 
 	deletedResources, kept, errs := u.deleteRelease(rel)
 	if errs != nil {
+		rel.Info.Status = common.StatusFailed
+		if err := u.cfg.Releases.Update(rel); err != nil {
+			u.cfg.Logger().Debug(fmt.Sprintf("uninstall: Failed to store updated release: %s", err))
+			return nil, fmt.Errorf("uninstallation failed and failed to store updated release: %s", joinErrors(errs, "; "))
+		}
 		u.cfg.Logger().Debug("uninstall: Failed to delete release", slog.Any("error", errs))
-		return nil, fmt.Errorf("failed to delete release: %s", name)
+		return nil, fmt.Errorf("failed to delete release %s, %s", name, joinErrors(errs, "; "))
 	}
 
 	if kept != "" {
@@ -164,7 +171,7 @@ func (u *Uninstall) Run(name string) (*releasei.UninstallReleaseResponse, error)
 
 	if !u.DisableHooks {
 		serverSideApply := true
-		if err := u.cfg.execHook(rel, release.HookPostDelete, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(rel, release.HookPostDelete, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply, !u.DisableOpenAPIValidation); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -278,7 +285,7 @@ func (u *Uninstall) deleteRelease(rel *release.Release) (kube.ResourceList, stri
 		builder.WriteString("\n---\n" + file.Content)
 	}
 
-	resources, err := u.cfg.KubeClient.Build(strings.NewReader(builder.String()), false)
+	resources, err := u.cfg.KubeClient.Build(strings.NewReader(builder.String()), !u.DisableOpenAPIValidation)
 	if err != nil {
 		return nil, "", []error{fmt.Errorf("unable to build kubernetes objects for delete: %w", err)}
 	}

@@ -34,9 +34,9 @@ import (
 // execHook executes all of the hooks for the given hook event.
 func (cfg *Configuration) execHook(rl *release.Release, hook release.HookEvent,
 	waitStrategy kube.WaitStrategy, waitOptions []kube.WaitOption,
-	timeout time.Duration, serverSideApply bool) error {
+	timeout time.Duration, serverSideApply bool, openAPIValidation bool) error {
 
-	shutdown, err := cfg.execHookWithDelayedShutdown(rl, hook, waitStrategy, waitOptions, timeout, serverSideApply)
+	shutdown, err := cfg.execHookWithDelayedShutdown(rl, hook, waitStrategy, waitOptions, timeout, serverSideApply, openAPIValidation)
 	if shutdown == nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func shutdownNoOp() error {
 // execHookWithDelayedShutdown executes all of the hooks for the given hook event and returns a shutdownHook function to trigger deletions after doing other things like e.g. retrieving logs.
 func (cfg *Configuration) execHookWithDelayedShutdown(rl *release.Release, hook release.HookEvent,
 	waitStrategy kube.WaitStrategy, waitOptions []kube.WaitOption, timeout time.Duration,
-	serverSideApply bool) (ExecuteShutdownFunc, error) {
+	serverSideApply bool, openAPIValidation bool) (ExecuteShutdownFunc, error) {
 
 	executingHooks := []*release.Hook{}
 
@@ -81,7 +81,7 @@ func (cfg *Configuration) execHookWithDelayedShutdown(rl *release.Release, hook 
 			return shutdownNoOp, err
 		}
 
-		resources, err := cfg.KubeClient.Build(bytes.NewBufferString(h.Manifest), true)
+		resources, err := cfg.KubeClient.Build(bytes.NewBufferString(h.Manifest), openAPIValidation)
 		if err != nil {
 			return shutdownNoOp, fmt.Errorf("unable to build kubernetes object for %s hook %s: %w", hook, h.Path, err)
 		}

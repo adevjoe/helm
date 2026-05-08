@@ -161,8 +161,7 @@ func (u *Upgrade) SetRegistryClient(client *registry.Client) {
 }
 
 // Run executes the upgrade on the given release.
-func (u *Upgrade) Run(name string, chart chart.Charter, vals map[string]any) (ri.Releaser, error) {
-	ctx := context.Background()
+func (u *Upgrade) Run(ctx context.Context, name string, chart chart.Charter, vals map[string]any) (ri.Releaser, error) {
 	return u.RunWithContext(ctx, name, chart, vals)
 }
 
@@ -382,8 +381,11 @@ func (u *Upgrade) performUpgrade(ctx context.Context, originalRelease, upgradedR
 	var toBeUpdated kube.ResourceList
 	if u.TakeOwnership {
 		toBeUpdated, err = requireAdoption(toBeCreated)
-	} else {
+	} else if !isDryRun(u.DryRunStrategy) {
 		toBeUpdated, err = existingResourceConflict(toBeCreated, upgradedRelease.Name, upgradedRelease.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("rendered manifests contain a resource that already exists. Unable to continue with update: %w", err)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to continue with update: %w", err)
@@ -459,7 +461,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 	// pre-upgrade hooks
 
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply, !u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, kube.ResourceList{}, fmt.Errorf("pre-upgrade hooks failed: %w", err))
 			return
 		}
@@ -507,7 +509,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 
 	// post-upgrade hooks
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.WaitStrategy, u.WaitOptions, u.Timeout, serverSideApply, !u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, results.Created, fmt.Errorf("post-upgrade hooks failed: %w", err))
 			return
 		}

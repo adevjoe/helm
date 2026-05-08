@@ -2,6 +2,8 @@ module helm.sh/helm/v4
 
 go 1.26.0
 
+replace k8s.io/kubernetes => k8s.io/kubernetes v1.26.5
+
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24
 	github.com/BurntSushi/toml v1.6.0
@@ -54,6 +56,11 @@ require (
 )
 
 require (
+	github.com/Tencent/bk-bcs/bcs-scenarios/kourse v0.0.0-20230620131944-108c92952073
+	github.com/dgraph-io/ristretto v0.2.0
+)
+
+require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
@@ -73,6 +80,7 @@ require (
 	github.com/docker/docker-credential-helpers v0.9.5 // indirect
 	github.com/docker/go-events v0.0.0-20250808211157-605354379745 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
@@ -117,6 +125,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.39.1 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -173,6 +182,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/component-base v0.36.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
+	k8s.io/kubernetes v0.0.0-00010101000000-000000000000 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect

@@ -21,10 +21,15 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"slices"
+	"sync"
 
+	"helm.sh/helm/v4/pkg/release"
+	"helm.sh/helm/v4/pkg/release/common"
 	rspb "helm.sh/helm/v4/pkg/release/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 var b64 = base64.StdEncoding
@@ -115,4 +120,47 @@ func ContainsSystemLabels(lbs map[string]string) bool {
 
 func GetSystemLabels() []string {
 	return systemLabels
+}
+
+func (secrets *Secrets) cacheDecodeReleases(list *v1.SecretList, filter func(release.Releaser) bool) []release.Releaser {
+	var results []release.Releaser
+	resultChan := make(chan release.Releaser, len(list.Items))
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(list.Items))
+	for _, item := range list.Items {
+		go func(item v1.Secret) {
+			defer wg.Done()
+			cacheKey := fmt.Sprintf("%s-%s-%s", item.GetUID(), item.GetNamespace(), item.GetName())
+			if i, ok := secrets.cache.Get(cacheKey); ok {
+				if ii, ok := i.(*rspb.Release); ok {
+					resultChan <- ii.Deepcopy()
+					return
+				}
+			}
+			rls, err := decodeRelease(string(item.Data["release"]))
+			if err != nil {
+				secrets.Logger().Debug(fmt.Sprintf("list: failed to decode release: %v: %s", item, err))
+				return
+			}
+
+			rls.Labels = item.ObjectMeta.Labels
+			if rls.Info.Status == common.StatusSuperseded || rls.Info.Status == common.StatusFailed {
+				secrets.cache.Set(cacheKey, rls, int64(len(item.Data["release"])))
+			}
+			resultChan <- rls
+		}(item)
+	}
+	wg.Wait()
+	close(resultChan)
+	for k := range resultChan {
+		if filter == nil {
+			results = append(results, k)
+			continue
+		}
+		if filter(k) {
+			results = append(results, k)
+		}
+	}
+	return results
 }
