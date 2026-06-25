@@ -33,11 +33,14 @@ import (
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/helmpath"
 	"helm.sh/helm/v3/pkg/postrender"
+	"helm.sh/helm/v3/pkg/prerender"
 	"helm.sh/helm/v3/pkg/repo"
 )
 
 const (
 	outputFlag         = "output"
+	preRenderFlag      = "pre-renderer"
+	preRenderArgsFlag  = "pre-renderer-args"
 	postRenderFlag     = "post-renderer"
 	postRenderArgsFlag = "post-renderer-args"
 )
@@ -115,10 +118,89 @@ func (o *outputValue) Set(s string) error {
 	return nil
 }
 
+func bindPreRenderFlag(cmd *cobra.Command, varRef *prerender.PreRenderer) {
+	p := &preRendererOptions{varRef, "", []string{}}
+	cmd.Flags().Var(&preRendererString{p}, preRenderFlag, "the path to an executable to be used for pre rendering. If it exists in $PATH, the binary will be used, otherwise it will try to look for the executable at the given path")
+	cmd.Flags().Var(&preRendererArgsSlice{p}, preRenderArgsFlag, "an argument to the pre-renderer (can specify multiple)")
+}
+
 func bindPostRenderFlag(cmd *cobra.Command, varRef *postrender.PostRenderer) {
 	p := &postRendererOptions{varRef, "", []string{}}
 	cmd.Flags().Var(&postRendererString{p}, postRenderFlag, "the path to an executable to be used for post rendering. If it exists in $PATH, the binary will be used, otherwise it will try to look for the executable at the given path")
 	cmd.Flags().Var(&postRendererArgsSlice{p}, postRenderArgsFlag, "an argument to the post-renderer (can specify multiple)")
+}
+
+type preRendererOptions struct {
+	renderer   *prerender.PreRenderer
+	binaryPath string
+	args       []string
+}
+
+type preRendererString struct {
+	options *preRendererOptions
+}
+
+func (p *preRendererString) String() string {
+	return p.options.binaryPath
+}
+
+func (p *preRendererString) Type() string {
+	return "preRendererString"
+}
+
+func (p *preRendererString) Set(val string) error {
+	if val == "" {
+		return nil
+	}
+	p.options.binaryPath = val
+	pr, err := prerender.NewExec(p.options.binaryPath, p.options.args...)
+	if err != nil {
+		return err
+	}
+	*p.options.renderer = pr
+	return nil
+}
+
+type preRendererArgsSlice struct {
+	options *preRendererOptions
+}
+
+func (p *preRendererArgsSlice) String() string {
+	return "[" + strings.Join(p.options.args, ",") + "]"
+}
+
+func (p *preRendererArgsSlice) Type() string {
+	return "preRendererArgsSlice"
+}
+
+func (p *preRendererArgsSlice) Set(val string) error {
+	// a pre-renderer defined by a user may accept empty arguments
+	p.options.args = append(p.options.args, val)
+
+	if p.options.binaryPath == "" {
+		return nil
+	}
+	// overwrite if already create PreRenderer by `pre-renderer` flags
+	pr, err := prerender.NewExec(p.options.binaryPath, p.options.args...)
+	if err != nil {
+		return err
+	}
+	*p.options.renderer = pr
+	return nil
+}
+
+func (p *preRendererArgsSlice) Append(val string) error {
+	p.options.args = append(p.options.args, val)
+	return nil
+}
+
+func (p *preRendererArgsSlice) Replace(val []string) error {
+	p.options.args = val
+	return nil
+}
+
+func (p *preRendererArgsSlice) GetSlice() []string {
+	return p.options.args
 }
 
 type postRendererOptions struct {

@@ -32,6 +32,7 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/kube"
 	"helm.sh/helm/v3/pkg/postrender"
+	"helm.sh/helm/v3/pkg/prerender"
 	"helm.sh/helm/v3/pkg/registry"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/releaseutil"
@@ -104,6 +105,11 @@ type Upgrade struct {
 	// Description is the description of this operation
 	Description string
 	Labels      map[string]string
+	// PreRenderer is an optional pre-renderer
+	//
+	// If this is non-nil, then before templates are rendered, the chart and values will be sent to the
+	// pre renderer for modification.
+	PreRenderer prerender.PreRenderer
 	// PostRender is an optional post-renderer
 	//
 	// If this is non-nil, then after templates are rendered, they will be sent to the
@@ -272,7 +278,7 @@ func (u *Upgrade) prepareUpgrade(name string, chart *chart.Chart, vals map[strin
 		interactWithRemote = true
 	}
 
-	hooks, manifestDoc, notesTxt, err := u.cfg.renderResources(chart, valuesToRender, "", "", u.SubNotes, false, false, u.PostRenderer, interactWithRemote, u.EnableDNS, u.HideSecret)
+	hooks, manifestDoc, notesTxt, err := u.cfg.renderResources(chart, valuesToRender, "", "", u.SubNotes, false, false, u.PreRenderer, u.PostRenderer, interactWithRemote, u.EnableDNS, u.HideSecret)
 	if err != nil {
 		return nil, nil, err
 	}
